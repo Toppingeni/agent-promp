@@ -170,9 +170,17 @@ class Oracle {
       try {
         const results = await Promise.all(
           queries.map(async (query) => {
-            const result = await connection.execute<T>(query.sql, query.params, this.options);
+            const startTime = Date.now();
+            try {
+              const result = await connection.execute<T>(query.sql, query.params, this.options);
+              const duration = Date.now() - startTime;
+              logger.logSQL(query.sql, query.params, duration);
 
-            return result.rows ? result.rows : [];
+              return result.rows ? result.rows : [];
+            } catch (error: unknown) {
+              logger.logSQLError(query.sql, query.params, error);
+              throw error;
+            }
           }),
         );
 
@@ -225,9 +233,17 @@ class Oracle {
       try {
         const results = await Promise.all(
           commands.map(async (command) => {
-            const result = await connection.execute<T>(command.sql, command.params, this.options);
+            const startTime = Date.now();
+            try {
+              const result = await connection.execute<T>(command.sql, command.params, this.options);
+              const duration = Date.now() - startTime;
+              logger.logSQL(command.sql, command.params, duration);
 
-            return result;
+              return result;
+            } catch (error: unknown) {
+              logger.logSQLError(command.sql, command.params, error);
+              throw error;
+            }
           }),
         );
 
@@ -245,9 +261,6 @@ class Oracle {
         } else {
           // ถ้าไม่มี callback ให้ใช้ logic เดิม
           if (results.some((result) => result.rowsAffected && result.rowsAffected > 0)) {
-            commands.forEach((element) => {
-              logger.logSQL(element.sql, Object.values(element.params));
-            });
             await connection.commit();
           }
         }
@@ -256,9 +269,6 @@ class Oracle {
       } catch (error: unknown) {
         // ถ้าเกิด error ในการ execute commands ให้ rollback
         await connection.rollback();
-        commands.forEach((element) => {
-          logger.logSQLError(element.sql, Object.values(element.params), error);
-        });
         console.error(error);
         const message = error instanceof Error ? error.message : 'Error executing Oracle command';
         throw new Error(message);
@@ -276,6 +286,7 @@ class Oracle {
   async commandMany<T>(sql: string, params: oracledb.BindParameters[], bindDefs: oracledb.BindDefinition) {
     return await oracleConnection(this.dbName, async (connection) => {
       try {
+        const startTime = Date.now();
         const options = {
           ...this.optionExecuteMany,
           bindDefs,
@@ -284,11 +295,16 @@ class Oracle {
 
         if (result.batchErrors && result.batchErrors.length > 0) {
           await connection.rollback();
+          logger.logSQLError(sql, params, result.batchErrors);
           throw new Error(result.batchErrors[0].message);
         }
 
+        const duration = Date.now() - startTime;
+        logger.logSQL(sql, params, duration);
+
         return result;
       } catch (error: unknown) {
+        logger.logSQLError(sql, params, error);
         console.error(error);
         const message = error instanceof Error ? error.message : 'Error executing Oracle command';
         throw new Error(message);
@@ -333,13 +349,13 @@ class Oracle {
               ${obj.spName}(${
                 obj.input
                   ? Object.keys(obj.input)
-                      .map((x) => \`:\${x}\`)
+                      .map((x) => `:${x}`)
                       .join(', ')
                   : ''
               }${obj.input ? ',' : ''}${
                 obj.output
                   ? Object.keys(obj.output)
-                      .map((x) => \`:\${x}\`)
+                      .map((x) => `:${x}`)
                       .join(', ')
                   : ''
               });
@@ -364,18 +380,24 @@ class Oracle {
               };
             });
           }
+          const callStartTime = Date.now();
+          try {
+            const res = await connection.execute(sql, bindOutput as oracledb.BindParameters, {
+              autoCommit: false,
+            });
 
-          const res = await connection.execute(sql, bindOutput as oracledb.BindParameters, {
-            autoCommit: false,
-          });
+            const duration = Date.now() - callStartTime;
+            logger.LogSqlResult(sql, [convertParam], duration, res.rowsAffected, (res.outBinds as Record<string, unknown>) || {});
 
-          const duration = Date.now() - startTime;
-          logger.LogSqlResult(sql, [convertParam], duration, res.rowsAffected, (res.outBinds as Record<string, unknown>) || {});
-
-          output.push({
-            rowsAffected: res.rowsAffected || 0,
-            output: (res.outBinds as Record<string, unknown>) || {},
-          });
+            output.push({
+              rowsAffected: res.rowsAffected || 0,
+              output: (res.outBinds as Record<string, unknown>) || {},
+            });
+          } catch (error: unknown) {
+            const duration = Date.now() - callStartTime;
+            logger.logSQLError(sql, convertParam, error);
+            throw error;
+          }
         }
 
         await connection.commit();
@@ -396,18 +418,23 @@ class Oracle {
    * @returns SQL statement string
    */
   async getSqlStmt(sqlNo: number, _appId?: number): Promise<string> {
+    const appId = _appId ?? this.appID;
+    const sqlTab = `SELECT  SQL_STMT FROM KPDBA.SQL_TAB_OPPN sto WHERE app_id = ${appId} AND sql_no = ${sqlNo}`;
     try {
-      const appId = _appId ?? this.appID;
-      const sqlTab = \`SELECT  SQL_STMT FROM KPDBA.SQL_TAB_OPPN sto WHERE app_id = \${appId} AND sql_no = \${sqlNo}\`;
-
+      const startTime = Date.now();
       const result = await this.query<{ SQL_STMT: string }>(sqlTab, [], {
         fetchInfo: {
           SQL_STMT: { type: oracledb.STRING },
         },
       });
 
+      const duration = Date.now() - startTime;
+      logger.logSQL(sqlTab, [], duration);
+
       return result[0].SQL_STMT;
     } catch (error: unknown) {
+      const appId = _appId ?? this.appID;
+      logger.logSQLError(sqlTab, [], error);
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(message);
     }
