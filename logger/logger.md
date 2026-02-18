@@ -70,7 +70,7 @@ export const contextMiddleware = (req: Request, res: Response, next: NextFunctio
   const store = {
     userId,
     userName,
-    requestId: (req.headers['x-request-id'] as string) || `req-${Date.now()}`,
+    requestId: (req.headers['x-request-id'] as string) || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     trackingStatus,
   };
 
@@ -267,7 +267,7 @@ export class Logger {
     }
   }
 
-  public logSQL(sql: string, params?: any[], duration?: number): void {
+  public logSQL(sql: string, params?: any, duration?: number): void {
     // ใช้ INFO level แทน DEBUG เพื่อให้แสดงผลใน default config และส่ง WebSocket ได้ง่ายขึ้น
     if (this.shouldLog(LogLevel.INFO)) {
       const meta = {
@@ -280,7 +280,7 @@ export class Logger {
     }
   }
 
-  public logSQLError(sql: string, params?: any[], error?: any): void {
+  public logSQLError(sql: string, params?: any, error?: any): void {
     if (this.shouldLog(LogLevel.ERROR)) {
       const meta = {
         sql: sql.replace(/\s+/g, ' ').trim(),
@@ -308,8 +308,6 @@ export const logger = Logger.getInstance();
 // Export Convenience Functions (Helper Wrappers)
 export const logRequest = (method: string, url: string, body?: any, headers?: any) => logger.logRequest(method, url, body, headers);
 export const logResponse = (method: string, url: string, statusCode: number, duration: number) => logger.logResponse(method, url, statusCode, duration);
-export const logSQL = (sql: string, params?: any[], duration?: number) => logger.logSQL(sql, params, duration);
-export const logSQLError = (sql: string, params?: any[], error?: any) => logger.logSQLError(sql, params, error);
 ```
 
 ---
@@ -341,23 +339,26 @@ logger.error('Something went wrong', { errorCode: 500 });
 ### 4.3 การเรียกใช้ SQL Logger (ใน Database Layer)
 
 ```typescript
-import { logSQL, logSQLError } from '../utils/logger';
+async query<T>(sql: string, params: oracledb.BindParameters = {}, options?: oracledb.ExecuteOptions): Promise<T[]> {
+  return await oracleConnection(this.dbName, async (connection) => {
+    const startTime = Date.now();
+    try {
+      const result = await connection.execute<T>(sql, params, {
+        ...this.options,
+        ...options,
+      });
 
-async function queryDatabase(sql: string, params: any[]) {
-  const start = Date.now();
-  try {
-    // ... execute query ...
-    const duration = Date.now() - start;
+      const duration = Date.now() - startTime;
+      logger.logSQL(sql, params, duration);
 
-    // Log SQL Success
-    logSQL(sql, params, duration);
-
-    return result;
-  } catch (error) {
-    // Log SQL Error
-    logSQLError(sql, params, error);
-    throw error;
-  }
+      return result.rows ? result.rows : [];
+    } catch (error: unknown) {
+      logger.logSQLError(sql, params, error);
+      console.error(error);
+      const message = error instanceof Error ? error.message : 'Error querying Oracle database';
+      throw new Error(message);
+    }
+  });
 }
 ```
 
