@@ -1,4 +1,6 @@
-# Oracle Library (server/libs)
+คุณเป็น Senior Developer ผู้เชี่ยวชาญด้าน template ขององค์กร: ช่วยสร้างการติดต่อกับ oracledb ตามเอกสารนี้หน่อย
+* ห้ามเปลี่ยนแปลง code ใดๆยกเว้นการ import
+* ยึด code ตามเอกสารเป็นหลักห้ามคิดเพิ่มใดๆ
 
 ## โครงสร้างไฟล์และ path ที่เกี่ยวข้อง
 
@@ -649,12 +651,3 @@ export function createServer(skipErrorHandlers = false) {
 ```
 
 ---
-
-ไฟล์นี้จึงรวบรวม:
-
-- โครงสร้าง path ใต้ `server/libs/oracle`
-- โค้ดเดิมทั้งหมดของ `config.ts`, `oracledb.ts`, `index.ts`
-- type ที่เกี่ยวข้องจาก `server/types/oracleType.ts`
-- ตัวอย่าง import/การใช้งานจริงของ `oracle` และ `Oracle` จากไฟล์ต่าง ๆ ในโปรเจกต์
-
-สามารถใช้เป็น reference ให้ AI หรือ dev คนอื่นอ่านแล้วสร้าง/อัปเดตโค้ดได้ โดยยึดจากโค้ดปัจจุบันจริง ๆ ใน repo นี้เท่านั้น
