@@ -68,7 +68,7 @@ declare module 'tns' {
   export default parse;
 }
 ```
-## 1.2 `tnsconfig.json`
+## 1.2 `tsconfig.json`
 ```
 {
   "compilerOptions": {
