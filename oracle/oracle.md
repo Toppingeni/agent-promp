@@ -50,6 +50,37 @@ export const getConfig = async () => {
 };
 ```
 
+## 1.1 `server/@types/tns.d.ts`
+```
+declare module 'tns' {
+  type ITnsConfig = {
+    DESCRIPTION: {
+      ADDRESS_LIST: {
+        ADDRESS: { PROTOCOL: string; HOST: string; PORT: string };
+      };
+      CONNECT_DATA: { SID: string; SERVER?: string; SRVR?: string };
+    };
+  };
+
+  type ITns = Record<string, ITnsConfig>;
+
+  function parse(content: string): ITns;
+  export default parse;
+}
+```
+## 1.2 `tnsconfig.json`
+```
+{
+  "compilerOptions": {
+    ...
+    "noFallthroughCasesInSwitch": true,
+    "typeRoots": ["./node_modules/@types", "./@types"]
+  },
+  ...
+}
+
+```
+
 ---
 
 ## 2. `server/libs/oracle/oracledb.ts`
